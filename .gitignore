@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.env
+knowledge_base/*
+!knowledge_base/health_basics.md

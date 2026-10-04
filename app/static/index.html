@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>健康知识 Agent · 学习实验室</title>
+<style>
+body{font:16px/1.7 system-ui,sans-serif;background:#f3f7f6;color:#193b37;margin:0}main{max-width:880px;margin:45px auto;padding:24px}h1{font-size:32px;margin-bottom:8px}.tag{color:#287c71}section{background:white;padding:24px;border-radius:16px;margin:20px 0;border:1px solid #d8e6e2}textarea{box-sizing:border-box;width:100%;font:inherit;padding:12px;border:1px solid #abc9c0;border-radius:8px;resize:vertical}button{cursor:pointer;padding:10px 18px;margin:10px 6px 0 0;border:0;border-radius:8px;background:#17695d;color:white}button:disabled{opacity:.5}a{color:#17695d}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f3f7f6;padding:12px;font-size:13px}#answer{white-space:pre-wrap}.muted{color:#57726d;font-size:14px}
+</style>
+<main>
+<div class="tag">FASTAPI × AGENT / 入门实验室</div>
+<h1>从一个健康问题，理解一次 API 调用</h1>
+<p>输入问题 → FastAPI 校验 → 规则选择工具 → 返回结构化答案</p>
+<p class="muted">当前为规则演示，未接入大模型。仅支持一般健康知识，不提供诊断或处方。请使用虚构示例，不输入姓名、联系方式或病历。</p>
+<section><label for="question">你的问题</label><textarea id="question" rows="3" maxlength="1000">如何保持健康饮食？</textarea>
+<button id="send">发送问题</button><button id="example">换成运动问题</button> <a href="/docs" target="_blank" rel="noopener">打开 API 文档 ↗</a>
+<p id="status" role="status"></p><div id="answer" aria-live="polite"></div><ul id="sources"></ul>
+</section>
+<section><h2>本地知识库</h2><p class="muted">上传 UTF-8 编码的 Markdown 或 TXT 文件。提问时会先检索这些文件；命中后才把资料片段发给 DeepSeek。不要上传个人病历或身份信息。</p>
+<input id="knowledgeFile" type="file" accept=".md,.txt,text/markdown,text/plain"><button id="uploadKnowledge">添加到知识库</button><p id="uploadStatus" role="status"></p><ul id="knowledgeDocs"></ul></section>
+<section><h2>观察请求与响应</h2><p class="muted">这里的 steps 是程序执行记录，用来学习工作流。</p><pre id="request">POST /api/chat</pre><pre id="response">发送问题后，JSON 响应会显示在这里。</pre></section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+$('response').textContent='页面加载后，发送问题时会显示 API 响应。';
+$('example').onclick=()=>{$('question').value='久坐的人如何增加身体活动？'};
+$('send').onclick=async()=>{
+ const message=$('question').value.trim(); if(!message){$('status').textContent='请先输入问题。';return;}
+ $('send').disabled=true;$('status').textContent='正在请求…';$('answer').textContent='';$('sources').replaceChildren();
+ const payload={message};$('request').textContent='POST /api/chat\nContent-Type: application/json\n\n'+JSON.stringify(payload,null,2);
+ try{
+  const res=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  const data=await res.json();$('response').textContent=JSON.stringify(data,null,2);
+  if(!res.ok)throw new Error('请求失败，HTTP '+res.status+'；请查看下方响应。');
+  $('answer').textContent=data.answer;$('status').textContent='完成 · '+data.route+' · '+data.mode;
+  for(const source of data.sources){const li=document.createElement('li'),a=document.createElement('a');a.textContent=source.title;a.href=source.url;if(source.url.startsWith('http')){a.target='_blank';a.rel='noopener noreferrer';}li.append(a);$('sources').append(li);}
+ }catch(error){$('status').textContent=error.message;}finally{$('send').disabled=false;}
+};
+async function loadKnowledge(){
+ try{const res=await fetch('/api/knowledge'),docs=await res.json();$('knowledgeDocs').replaceChildren();
+  for(const doc of docs){const li=document.createElement('li');li.textContent=doc.title+'（'+doc.characters+' 字）';$('knowledgeDocs').append(li);}
+ }catch{$('knowledgeDocs').textContent='暂时无法读取知识库。';}
+}
+$('uploadKnowledge').onclick=async()=>{
+ const file=$('knowledgeFile').files[0];if(!file){$('uploadStatus').textContent='请先选择 .md 或 .txt 文件。';return;}
+ const body=new FormData();body.append('file',file);$('uploadStatus').textContent='正在添加…';
+ try{const res=await fetch('/api/knowledge',{method:'POST',body}),data=await res.json();if(!res.ok)throw new Error(data.detail||'上传失败');
+  $('uploadStatus').textContent='已添加：'+data.title+'。之后提问会先检索这份资料。';$('knowledgeFile').value='';await loadKnowledge();
+ }catch(error){$('uploadStatus').textContent=error.message;}
+};
+loadKnowledge();
+</script>
+</html>
